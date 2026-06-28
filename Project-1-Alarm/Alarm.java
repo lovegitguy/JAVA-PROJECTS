@@ -1,3 +1,5 @@
+import java.io.File;
+import java.io.FileInputStream;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -5,7 +7,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Scanner;
 
-public class alarm {
+public class Alarm {
     // Volatile boolean allows threads to safely share the stop signal
     private static volatile boolean alarmRunning = true;
     
@@ -25,6 +27,20 @@ public class alarm {
         // Using the time objects
         System.out.println("Date : " + formateddate);
         System.out.println("Time : " + formatedtime);
+
+        // Ask user for MP3 path
+        System.out.print("Enter MP3 path (or press Enter to skip) : ");
+        String mp3Path = sc.nextLine().trim();
+        File mp3File = null;
+        if (!mp3Path.isEmpty()) {
+            mp3File = new File(mp3Path);
+            if (!mp3File.exists() || !mp3Path.toLowerCase().endsWith(".mp3")) {
+                System.out.println("Invalid file, using system beep instead.");
+                mp3File = null;
+            } else {
+                System.out.println("MP3 loaded: " + mp3File.getName());
+            }
+        }
 
         System.out.println("Set your alarm");
         System.out.print("Enter your hour (1-12) : ");
@@ -82,6 +98,9 @@ public class alarm {
         // Clear residual characters from the scanner stream
         sc.nextLine();
 
+        // needed so the lambda can use mp3File
+        final File finalMp3 = mp3File;
+
         while (true) { 
             LocalTime freshStart = LocalTime.now(ZoneId.of("Asia/Kolkata"));
             LocalTime freshStartSec = freshStart.withNano(0);
@@ -92,11 +111,15 @@ public class alarm {
                 // Create a background thread to handle the continuous beeping
                 Thread beepThread = new Thread(() -> {
                     while (alarmRunning) {
-                        java.awt.Toolkit.getDefaultToolkit().beep();
-                        try { 
-                            Thread.sleep(600); // Wait 0.6 seconds between beeps
-                        } catch (Exception e) {
-                            // Thread interrupted on stop signal
+                        if (finalMp3 != null) {
+                            playMp3Once(finalMp3);
+                        } else {
+                            java.awt.Toolkit.getDefaultToolkit().beep();
+                            try { 
+                                Thread.sleep(600); // Wait 0.6 seconds between beeps
+                            } catch (Exception e) {
+                                // Thread interrupted on stop signal
+                            }
                         }
                     }
                 });
@@ -122,5 +145,17 @@ public class alarm {
             }
         } 
         sc.close();
+    }
+
+    private static void playMp3Once(File mp3File) {
+        try (FileInputStream fis = new FileInputStream(mp3File)) {
+            javazoom.jl.player.Player player = new javazoom.jl.player.Player(fis);
+            player.play();
+        } catch (javazoom.jl.decoder.JavaLayerException e) {
+            System.err.println("MP3 playback error: " + e.getMessage());
+            java.awt.Toolkit.getDefaultToolkit().beep();
+        } catch (Exception e) {
+            System.err.println("Unexpected playback error: " + e.getMessage());
+        }
     }
 }
